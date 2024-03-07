@@ -5,14 +5,6 @@ import numpy as np
 import polars as pl
 
 
-def zero_quadrature(s: pl.Series):
-    real, imag = s.struct.unnest().get_columns()
-    pha = np.arange(-1.571, 1.571, 1e-3)
-    imag_outer = np.outer(real, np.sin(pha)) + np.outer(imag, np.cos(pha))
-    pha_opt = pha[np.sum(np.abs(imag_outer) ** 2, axis=0).argmin()]
-    return real * np.cos(pha_opt) - imag * np.sin(pha_opt)
-
-
 @pl.api.register_expr_namespace("complex")
 class ComplexArithmetic:
     def __init__(self, expr: pl.Expr):
@@ -94,13 +86,7 @@ class ComplexArithmetic:
     def conj(self, name: str = None):
         real, imag = self._explode()
         imag *= -1
-        if name:
-            name = self.cformat(name)
-            return pl.struct(
-                real.alias(name.replace("[c]", ".real")),
-                imag.alias(name.replace("[c]", ".imag")),
-            ).alias(name)
-        return pl.struct(real, imag).alias(self.names[0])
+        return self._set_alias(real, imag, name)
 
     def quotient(self, expr, name: str = None):
         self._expr = self._expr.name.suffix_fields(".1")
@@ -108,13 +94,7 @@ class ComplexArithmetic:
         real2, imag2 = expr.name.suffix_fields(".2").complex._explode()
         real = (real1 * real2 + imag1 * imag2) / (real2.pow(2) + imag2.pow(2))
         imag = (real2 * imag1 - real1 * imag2) / (real2.pow(2) + imag2.pow(2))
-        if name:
-            alias = self.cformat(name)
-        else:
-            alias = self.cformat(self.names[0])
-        real = real.alias(alias.replace("[c]", ".real"))
-        imag = imag.alias(alias.replace("[c]", ".imag"))
-        return pl.struct(real, imag).alias(alias)
+        return self._set_alias(real, imag, name)
 
     def divide(self, expr, name: str = None):
         return self.quotient(expr, name=name)
@@ -126,47 +106,39 @@ class ComplexArithmetic:
         real, imag = self._explode()
         real /= real.pow(2) + imag.pow(2)
         imag /= -1 * (real.pow(2) + imag.pow(2))
-        if name:
-            alias = self.cformat(name)
-        else:
-            alias = self.cformat(self.names[0])
-        real = real.alias(alias.replace("[c]", ".real"))
-        imag = imag.alias(alias.replace("[c]", ".imag"))
-        return pl.struct(real, imag).alias(alias)
+        return self._set_alias(real, imag, name)
 
     def multiply(self, expr, name: str = None):
         a, b = self._explode()
         c, d = expr.complex._explode()
         real = a * c - b * d
         imag = a * d + b * c
-        if name:
-            alias = self.cformat(name)
-        else:
-            alias = self.cformat(self.names[0])
-        real = real.alias(alias.replace("[c]", ".real"))
-        imag = imag.alias(alias.replace("[c]", ".imag"))
-        return pl.struct(real, imag).alias(alias)
+        return self._set_alias(real, imag, name)
 
     def subtract(self, expr, name: str = None):
         real, imag = (self._expr - expr).complex._explode()
-        if name:
-            alias = self.cformat(name)
-        else:
-            alias = self.cformat(self.names[0])
-        real = real.alias(alias.replace("[c]", ".real"))
-        imag = imag.alias(alias.replace("[c]", ".imag"))
-        return pl.struct(real, imag).alias(alias)
+        return self._set_alias(real, imag, name)
 
     def difference(self, expr, name: str = None):
         return self.subtract(expr, name=name)
 
     def relative_difference(self, expr, name: str = None):
         real, imag = self.quotient(expr).complex._explode()
+        real -= 1
         if name:
             alias = self.cformat(name)
         else:
             alias = self.cformat(self.names[0])
-        real = (real - 1).alias(alias.replace("[c]", ".real"))
+        real = real.alias(alias.replace("[c]", ".real"))
+        imag = imag.alias(alias.replace("[c]", ".imag"))
+        return pl.struct(real, imag).alias(alias)
+
+    def _set_alias(self, real, imag, name: str = None):
+        if name:
+            alias = self.cformat(name)
+        else:
+            alias = self.cformat(self.names[0])
+        real = real.alias(alias.replace("[c]", ".real"))
         imag = imag.alias(alias.replace("[c]", ".imag"))
         return pl.struct(real, imag).alias(alias)
 
@@ -228,6 +200,18 @@ class ComplexFrame:
 
 
 def pl_fft(df, xname, id_vars=None):
+    """
+    Compute the Fast Fourier Transform (FFT) of the given DataFrame.
+
+    Args:
+        df (pl.DataFrame): The input DataFrame.
+        xname (str): The name of the column representing the x-axis values.
+        id_vars (list, optional): List of column names to use as grouping variables. Defaults to None.
+
+    Returns:
+        pl.DataFrame: The DataFrame containing the FFT results.
+    """
+
     def fftfreq(df):
         return np.fft.rfftfreq(
             len(df[xname]),
@@ -310,3 +294,11 @@ def _finditem(d, key="Columns"):
             if result is not None:
                 return result
     return None
+
+
+def zero_quadrature(s: pl.Series):
+    real, imag = s.struct.unnest().get_columns()
+    pha = np.arange(-1.571, 1.571, 1e-3)
+    imag_outer = np.outer(real, np.sin(pha)) + np.outer(imag, np.cos(pha))
+    pha_opt = pha[np.sum(np.abs(imag_outer) ** 2, axis=0).argmin()]
+    return real * np.cos(pha_opt) - imag * np.sin(pha_opt)
