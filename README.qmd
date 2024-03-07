@@ -10,8 +10,9 @@ This is a [namespace extension](https://docs.pola.rs/py-polars/html/reference/ap
 
 ## Creating the complex number representation
 
-:::: {.columns}
-::: {.column width="60%"}
+::: {.grid}
+
+::: {.g-col-6}
 
 ```{python}
 import polars as pl
@@ -26,7 +27,7 @@ df = pl.DataFrame({
 ```
 
 :::
-::: {.column width="40%"}
+::: {.g-col-6}
 
 ```{python}
 #| echo: false
@@ -34,11 +35,8 @@ print(df)
 ```
 
 :::
-::::
+:::
 
-
-:::: {.columns}
-::: {.column width="60%"}
 ```{python}
 import polars_complex
 
@@ -47,17 +45,11 @@ df = df.with_columns(
 )
 ```
 
-:::
-::: {.column width="40%"}
 
 ```{python}
 #| echo: false
 print(df)
 ```
-
-:::
-::::
-
 
 Note that the `[c]` suffix is the adopted convention to signal a complex number representation. If the columns to be converted to the Struct representation are named with the suffixes ".real" and ".imag", with a common prefix,
 
