@@ -3,11 +3,15 @@ title: "polars-complex"
 format:
     gfm:
         html-math-method: webtex
+
 ---
 
 This is a [namespace extension](https://docs.pola.rs/py-polars/html/reference/api/polars.api.register_expr_namespace.html) for the [polars](https://github.com/pola-rs/polars) library, which provides a complex number representation for the DataFrame type, together with an implementation of complex number arithmetic.
 
 ## Creating the complex number representation
+
+:::: {.columns}
+::: {.column width="60%"}
 
 ```{python}
 import polars as pl
@@ -19,17 +23,41 @@ df = pl.DataFrame({
     "x": np.random.random(6),
     "y": np.random.random(6),
 })
+```
+
+:::
+::: {.column width="40%"}
+
+```{python}
+#| echo: false
 print(df)
 ```
 
+:::
+::::
+
+
+:::: {.columns}
+::: {.column width="60%"}
 ```{python}
 import polars_complex
 
 df = df.with_columns(
     pl.col("x", "y").complex.struct("z") # or .struct().alias("z[c]")
 )
+```
+
+:::
+::: {.column width="40%"}
+
+```{python}
+#| echo: false
 print(df)
 ```
+
+:::
+::::
+
 
 Note that the `[c]` suffix is the adopted convention to signal a complex number representation. If the columns to be converted to the Struct representation are named with the suffixes ".real" and ".imag", with a common prefix,
 
