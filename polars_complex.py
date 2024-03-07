@@ -45,19 +45,17 @@ class ComplexArithmetic:
             ).alias(alias)
 
     def unnest(self):
-        real, imag = self._explode()
         stem = self.names[0].replace("[c]", "")
-        real = real.alias(f"{stem}.real")
-        imag = imag.alias(f"{stem}.imag")
-        return real, imag
+        self._expr = self._expr.struct.rename_fields([f"{stem}.real", f"{stem}.imag"])
+        return self._explode()
+
+    def _explode(self):
+        return self._expr.struct[0], self._expr.struct[1]
 
     def rename(self, name):
         if not name.endswith("[c]"):
             name = name + "[c]"
         return self._expr.alias(name)
-
-    def _explode(self):
-        return self._expr.struct[0], self._expr.struct[1]
 
     def real(self):
         return self._expr.struct[0]
@@ -86,7 +84,7 @@ class ComplexArithmetic:
     def conj(self, name: str = None):
         real, imag = self._explode()
         imag *= -1
-        return self._set_alias(real, imag, name)
+        return self.set_alias(real, imag, name)
 
     def quotient(self, expr, name: str = None):
         self._expr = self._expr.name.suffix_fields(".1")
@@ -94,7 +92,7 @@ class ComplexArithmetic:
         real2, imag2 = expr.name.suffix_fields(".2").complex._explode()
         real = (real1 * real2 + imag1 * imag2) / (real2.pow(2) + imag2.pow(2))
         imag = (real2 * imag1 - real1 * imag2) / (real2.pow(2) + imag2.pow(2))
-        return self._set_alias(real, imag, name)
+        return self.set_alias(real, imag, name)
 
     def divide(self, expr, name: str = None):
         return self.quotient(expr, name=name)
@@ -106,18 +104,18 @@ class ComplexArithmetic:
         real, imag = self._explode()
         real /= real.pow(2) + imag.pow(2)
         imag /= -1 * (real.pow(2) + imag.pow(2))
-        return self._set_alias(real, imag, name)
+        return self.set_alias(real, imag, name)
 
     def multiply(self, expr, name: str = None):
         a, b = self._explode()
         c, d = expr.complex._explode()
         real = a * c - b * d
         imag = a * d + b * c
-        return self._set_alias(real, imag, name)
+        return self.set_alias(real, imag, name)
 
     def subtract(self, expr, name: str = None):
         real, imag = (self._expr - expr).complex._explode()
-        return self._set_alias(real, imag, name)
+        return self.set_alias(real, imag, name)
 
     def difference(self, expr, name: str = None):
         return self.subtract(expr, name=name)
@@ -133,7 +131,7 @@ class ComplexArithmetic:
         imag = imag.alias(alias.replace("[c]", ".imag"))
         return pl.struct(real, imag).alias(alias)
 
-    def _set_alias(self, real, imag, name: str = None):
+    def set_alias(self, real, imag, name: str = None):
         if name:
             alias = self.cformat(name)
         else:
@@ -199,7 +197,7 @@ class ComplexFrame:
         )
 
 
-def pl_fft(df, xname, id_vars=None):
+def pl_fft(df, xname, id_vars=None, rfft=True):
     """
     Compute the Fast Fourier Transform (FFT) of the given DataFrame.
 
@@ -207,16 +205,23 @@ def pl_fft(df, xname, id_vars=None):
         df (pl.DataFrame): The input DataFrame.
         xname (str): The name of the column representing the x-axis values.
         id_vars (list, optional): List of column names to use as grouping variables. Defaults to None.
+        real_valued (bool, optional): Whether the input data is real-valued. Defaults to True, and uses `rfft`.
 
     Returns:
         pl.DataFrame: The DataFrame containing the FFT results.
     """
 
     def fftfreq(df):
-        return np.fft.rfftfreq(
-            len(df[xname]),
-            abs(df[xname][1] - df[xname][0]),
-        )
+        if rfft:
+            return np.fft.rfftfreq(
+                len(df[xname]),
+                abs(df[xname][1] - df[xname][0]),
+            )
+        else:
+            return np.fft.fftfreq(
+                len(df[xname]),
+                abs(df[xname][1] - df[xname][0]),
+            )
 
     def varname_iter(fft_dict, value_vars):
         for name in value_vars:
@@ -231,8 +236,9 @@ def pl_fft(df, xname, id_vars=None):
     value_vars = [var for var in df.columns if var not in id_vars and var != xname]
 
     frames = []
+    fft_transform = np.fft.rfft if rfft else np.fft.fft
     if not id_vars:
-        fft_dict = {name: np.fft.rfft(df[name].to_numpy()) for name in value_vars}
+        fft_dict = {name: fft_transform(df[name].to_numpy()) for name in value_vars}
         frames.append(
             pl.DataFrame(
                 (
@@ -246,7 +252,7 @@ def pl_fft(df, xname, id_vars=None):
             if isinstance(id_vals, (float, int, str)):
                 id_vals = [id_vals]
             fft_dict = {
-                name: np.fft.rfft(group[name].to_numpy()) for name in value_vars
+                name: fft_transform(group[name].to_numpy()) for name in value_vars
             }
             frames.append(
                 pl.DataFrame(
