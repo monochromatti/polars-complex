@@ -1,0 +1,5 @@
+__pycache__/
+polars_complex/__pycache__/
+*.egg-info/
+.DS_Store
+build/
