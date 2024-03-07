@@ -1,0 +1,94 @@
+---
+title: "polars-complex"
+format:
+    gfm:
+        html-math-method: webtex
+---
+
+This is a [namespace extension](https://docs.pola.rs/py-polars/html/reference/api/polars.api.register_expr_namespace.html) for the [polars](https://github.com/pola-rs/polars) library, which provides a complex number representation for the DataFrame type, together with an implementation of complex number arithmetic.
+
+## Creating the complex number representation
+
+```{python}
+import polars as pl
+import numpy as np
+
+pl.Config.set_float_precision(3)
+
+df = pl.DataFrame({
+    "x": np.random.random(6),
+    "y": np.random.random(6),
+})
+print(df)
+```
+
+```{python}
+import polars_complex
+
+df = df.with_columns(
+    pl.col("x", "y").complex.struct("z") # or .struct().alias("z[c]")
+)
+print(df)
+```
+
+Note that the `[c]` suffix is the adopted convention to signal a complex number representation. If the columns to be converted to the Struct representation are named with the suffixes ".real" and ".imag", with a common prefix,
+
+```{python}
+df = pl.DataFrame({
+    "z.real": np.random.random(6),
+    "z.imag": np.random.random(6),
+})
+print(df)
+```
+
+then the construction is a little more succinct:
+
+```{python}
+
+df = df.with_columns(
+    pl.col("z").complex.struct()
+)
+print(df)
+```
+
+## Arithmetic
+
+Common operations, such as extracting phase, modulus, conjugation, division, multiplication, and addition, are supported. They result in a new complex number representation, or a numerical representation, depending on the operation.
+
+Using the dataframe above, here are some examples:
+
+```{python}
+
+df = df.select(
+    pl.col("z[c]"),
+    (pl.col("z[c]").complex.conj()).alias("conj(z)[c]"),
+    (pl.col("z[c]").complex.modulus()).alias("|z|"),
+    (pl.col("z[c]").complex.phase()).alias("arg(z)"),
+    (pl.col("z[c]") / 2.024).alias("w[c]"),
+).with_columns(
+    pl.col("z[c]").complex.divide(pl.col("w[c]")).alias("z/w[c]"),
+    pl.col("z[c]").complex.multiply(pl.col("w[c]")).alias("z*w[c]"),
+)
+print(df)
+
+```
+
+## Converting back to numeric representation
+
+Converting back (unnesting the structs) can be done either in the dataframe namespace,
+
+```{python}
+
+print(df.complex.unnest())
+
+```
+
+or on individual columns,
+
+```{python}
+
+print(df.select(
+    pl.col("w[c]").complex.unnest()
+))
+
+```
