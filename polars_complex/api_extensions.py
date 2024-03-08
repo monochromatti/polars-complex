@@ -6,7 +6,7 @@ import polars as pl
 
 
 @pl.api.register_expr_namespace("complex")
-class ComplexArithmetic:
+class ComplexMethods:
     def __init__(self, expr: pl.Expr):
         self._expr = expr
 
@@ -66,6 +66,9 @@ class ComplexArithmetic:
     def phase(self):
         return pl.arctan2(self._expr.struct[0], self._expr.struct[1])
 
+    def phase_unwrapped(self):
+        return self.phase().complex.unwrap_phase()
+
     def unwrap_phase(self):
         diff = self._expr - self._expr.shift()
         if_lower = pl.when(diff < -3.14159).then(diff + 2 * 3.14159)
@@ -87,11 +90,12 @@ class ComplexArithmetic:
         return self.set_alias(real, imag, name)
 
     def quotient(self, expr, name: str = None):
-        self._expr = self._expr.name.suffix_fields(".1")
-        real1, imag1 = self._explode()
-        real2, imag2 = expr.name.suffix_fields(".2").complex._explode()
-        real = (real1 * real2 + imag1 * imag2) / (real2.pow(2) + imag2.pow(2))
-        imag = (real2 * imag1 - real1 * imag2) / (real2.pow(2) + imag2.pow(2))
+        if isinstance(expr, str):
+            expr = pl.col(expr)
+        amplitude = self.modulus() / expr.complex.modulus()
+        phase = self.phase() - expr.complex.phase()
+        real = amplitude * phase.cos()
+        imag = amplitude * phase.sin()
         return self.set_alias(real, imag, name)
 
     def divide(self, expr, name: str = None):
@@ -106,7 +110,9 @@ class ComplexArithmetic:
         imag /= -1 * (real.pow(2) + imag.pow(2))
         return self.set_alias(real, imag, name)
 
-    def multiply(self, expr, name: str = None):
+    def multiply(self, expr: str | pl.Expr, name: str = None):
+        if isinstance(expr, str):
+            expr = pl.col(expr)
         a, b = self._explode()
         c, d = expr.complex._explode()
         real = a * c - b * d
@@ -196,84 +202,6 @@ class ComplexFrame:
             ],
         )
 
-
-def pl_fft(df, xname, id_vars=None, rfft=True):
-    """
-    Compute the Fast Fourier Transform (FFT) of the given DataFrame.
-
-    Args:
-        df (pl.DataFrame): The input DataFrame.
-        xname (str): The name of the column representing the x-axis values.
-        id_vars (list, optional): List of column names to use as grouping variables. Defaults to None.
-        real_valued (bool, optional): Whether the input data is real-valued. Defaults to True, and uses `rfft`.
-
-    Returns:
-        pl.DataFrame: The DataFrame containing the FFT results.
-    """
-
-    def fftfreq(df):
-        if rfft:
-            return np.fft.rfftfreq(
-                len(df[xname]),
-                abs(df[xname][1] - df[xname][0]),
-            )
-        else:
-            return np.fft.fftfreq(
-                len(df[xname]),
-                abs(df[xname][1] - df[xname][0]),
-            )
-
-    def varname_iter(fft_dict, value_vars):
-        for name in value_vars:
-            for component, operator in zip(("real", "imag"), (np.real, np.imag)):
-                yield pl.Series(
-                    f"{name}.{component}",
-                    operator(fft_dict[name]),
-                    dtype=df.schema[name],
-                )
-
-    id_vars = id_vars or []
-    value_vars = [var for var in df.columns if var not in id_vars and var != xname]
-
-    frames = []
-    fft_transform = np.fft.rfft if rfft else np.fft.fft
-    if not id_vars:
-        fft_dict = {name: fft_transform(df[name].to_numpy()) for name in value_vars}
-        frames.append(
-            pl.DataFrame(
-                (
-                    pl.Series("freq", fftfreq(df)),
-                    *varname_iter(fft_dict, value_vars),
-                )
-            )
-        )
-    else:
-        for id_vals, group in df.group_by(*id_vars, maintain_order=True):
-            if isinstance(id_vals, (float, int, str)):
-                id_vals = [id_vals]
-            fft_dict = {
-                name: fft_transform(group[name].to_numpy()) for name in value_vars
-            }
-            frames.append(
-                pl.DataFrame(
-                    (
-                        pl.Series("freq", fftfreq(group)),
-                        *varname_iter(fft_dict, value_vars),
-                    )
-                )
-                .with_columns(
-                    pl.lit(value).cast(df.schema[name]).alias(name)
-                    for name, value in zip(id_vars, list(id_vals))
-                )
-                .select(
-                    *(pl.col(name) for name in id_vars),
-                    pl.col("freq"),
-                    pl.all().exclude("freq", *id_vars),
-                )
-            )
-    return pl.concat(frames)
-
-
 def _finditem(d, key="Columns"):
     """
     Recursive function to search for the first occurrence of the key `key` in a
@@ -300,11 +228,3 @@ def _finditem(d, key="Columns"):
             if result is not None:
                 return result
     return None
-
-
-def zero_quadrature(s: pl.Series):
-    real, imag = s.struct.unnest().get_columns()
-    pha = np.arange(-1.571, 1.571, 1e-3)
-    imag_outer = np.outer(real, np.sin(pha)) + np.outer(imag, np.cos(pha))
-    pha_opt = pha[np.sum(np.abs(imag_outer) ** 2, axis=0).argmin()]
-    return real * np.cos(pha_opt) - imag * np.sin(pha_opt)
