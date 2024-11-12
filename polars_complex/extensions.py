@@ -2,8 +2,6 @@ import polars as pl
 from polars._typing import IntoExpr
 from polars.expr.expr import Expr
 
-from . import arithmetic as ar
-
 
 @pl.api.register_expr_namespace("complex")
 class ComplexExprNamespace:
@@ -45,55 +43,76 @@ class ComplexExpr(Expr):
         raise ValueError(f"Cannot cast {type(other)} to ComplexExpr.")
 
     def __add__(self, other):
-        return ComplexExpr(ar.add(self, self.cast_to_self(other)))
+        other = self.cast_to_self(other)
+        expr = pl.struct(
+            (self.real + other.real).alias("real"),
+            (self.imag + other.imag).alias("imag"),
+        )
+        return ComplexExpr(expr)
 
     def __radd__(self, other):
-        return self.__add__(self.cast_to_self(other))
+        return self.cast_to_self(other).__add__(self)
 
     def __sub__(self, other):
-        return ComplexExpr(ar.subtract(self, self.cast_to_self(other)))
+        other = self.cast_to_self(other)
+        expr = pl.struct(
+            (self.real - other.real).alias("real"),
+            (self.imag - other.imag).alias("imag"),
+        )
+        return ComplexExpr(expr)
 
     def __rsub__(self, other):
-        return ComplexExpr((self.cast_to_self(other) - self.expr) * -1)
+        return ComplexExpr(self.cast_to_self(other).__sub__(self))
 
     def __mul__(self, other):
-        return ComplexExpr(ar.multiply(self, self.cast_to_self(other)))
+        other = self.cast_to_self(other)
+        expr = pl.struct(
+            (self.real * other.real - self.imag * other.imag).alias("real"),
+            (self.real * other.imag + self.imag * other.real).alias("imag"),
+        )
+        return ComplexExpr(expr)
 
     def __rmul__(self, other):
-        return ComplexExpr(self.__mul__(self.cast_to_self(other)))
+        return ComplexExpr(self.cast_to_self(other).__mul__(self))
 
     def __truediv__(self, other):
-        return ComplexExpr(ar.divide(self, self.cast_to_self(other)))
+        other = self.cast_to_self(other)
+        expr_norm = other.real.pow(2) + other.imag.pow(2)
+        expr = pl.struct(
+            (self.real * other.real + self.imag * other.imag) / expr_norm,
+            (self.imag * other.real - self.real * other.imag) / expr_norm,
+        ).struct.rename_fields(["real", "imag"])
+        return ComplexExpr(expr)
 
     def __rtruediv__(self, other):
-        return ComplexExpr(self.cast_to_self(other) / self.expr)
+        return ComplexExpr(self.cast_to_self(other).__truediv__(self))
 
-    def exp(self):
-        return ComplexExpr(ar.exp(self))
+    # def exp(self):
+    #     return ComplexExpr(self.expr.exp())
 
-    def sin(self):
-        return ComplexExpr(ar.sin(self))
+    # def sin(self):
+    #     return ComplexExpr(ar.sin(self))
 
-    def cos(self):
-        return ComplexExpr(ar.cos(self))
+    # def cos(self):
+    #     return ComplexExpr(ar.cos(self))
 
-    def pow(self, n: int | float):  # pyright: ignore [reportIncompatibleMethodOverride]
-        return ComplexExpr(ar.pow(self, n))
+    # def pow(self, n: int | float):  # pyright: ignore [reportIncompatibleMethodOverride]
+    #     return ComplexExpr(ar.pow(self, n))
 
-    def squared_modulus(self):
-        return ComplexExpr(ar.squared_modulus(self))
+    # def squared_modulus(self):
+    #     return ComplexExpr(ar.squared_modulus(self))
 
-    def modulus(self):
-        return ComplexExpr(ar.modulus(self))
+    # def modulus(self):
+    #     return ComplexExpr(ar.modulus(self))
 
-    def phase(self):
-        return ComplexExpr(ar.phase(self))
+    # def phase(self):
+    #     return ComplexExpr(ar.phase(self))
 
-    def unwrap_phase(self):
-        return ComplexExpr(ar.unwrap_phase(self))
+    # def unwrap_phase(self):
+    #     return ComplexExpr(ar.unwrap_phase(self))
 
-    def conj(self):
-        return ComplexExpr(ar.conj(self))
+    # def conj(self):
+    #     return ComplexExpr(ar.conj(self))
 
 
 # @pl.api.register_dataframe_namespace("complex")
