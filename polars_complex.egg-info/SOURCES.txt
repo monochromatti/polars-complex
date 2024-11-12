@@ -1,8 +1,0 @@
-LICENSE
-README.md
-polars_complex.py
-pyproject.toml
-polars_complex.egg-info/PKG-INFO
-polars_complex.egg-info/SOURCES.txt
-polars_complex.egg-info/dependency_links.txt
-polars_complex.egg-info/top_level.txt

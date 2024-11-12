@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: polars_complex
-Version: 0.1.0
-Summary: Utility functions for working with complex numbers in Polars
-Author: Mattias Matthiesen
-Requires-Python: >=3.10
-License-File: LICENSE
