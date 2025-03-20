@@ -6,9 +6,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Mattias Matthiesen" }]
 requires-python = ">=3.10"
-dependencies = [
-    "polars>=1.9.0",
-]
+dependencies = ["polars>=1.0"]
 
 [dependency-groups]
 dev = [
